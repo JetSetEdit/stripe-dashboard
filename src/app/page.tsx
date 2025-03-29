@@ -7,6 +7,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Toaster } from "@/components/ui/sonner"
 import { TimeTracking } from "@/components/TimeTracking"
+import { toast } from "sonner"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface Customer {
   id: string
@@ -22,6 +31,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false)
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null)
 
   useEffect(() => {
     fetchCustomers()
@@ -39,9 +49,11 @@ export default function DashboardPage() {
       const data = await response.json()
       console.log('Customers data received:', data)
       setCustomers(data.data)
+      toast.success('Customers loaded successfully')
     } catch (error) {
       console.error('Error fetching customers:', error)
       setError('Failed to load customers. Please try again.')
+      toast.error('Failed to load customers')
     } finally {
       setIsLoadingCustomers(false)
     }
@@ -49,7 +61,7 @@ export default function DashboardPage() {
 
   const createCustomer = async () => {
     if (!newCustomer.email || !newCustomer.name) {
-      alert('Please fill in all fields')
+      toast.error('Please fill in all fields')
       return
     }
 
@@ -65,20 +77,37 @@ export default function DashboardPage() {
       const data = await response.json()
       setCustomers([...customers, data])
       setNewCustomer({ email: "", name: "" })
+      toast.success('Customer created successfully')
     } catch (error) {
       console.error('Error creating customer:', error)
+      toast.error('Failed to create customer')
     }
     setLoading(false)
   }
 
-  const deleteCustomer = async (id: string) => {
+  const handleDeleteClick = (customer: Customer) => {
+    setCustomerToDelete(customer)
+  }
+
+  const deleteCustomer = async () => {
+    if (!customerToDelete) return
+
     try {
-      await fetch(`/api/customers/${id}`, {
+      const response = await fetch(`/api/customers/${customerToDelete.id}`, {
         method: 'DELETE'
       })
-      setCustomers(customers.filter(customer => customer.id !== id))
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete customer')
+      }
+      
+      setCustomers(customers.filter(customer => customer.id !== customerToDelete.id))
+      toast.success('Customer deleted successfully')
     } catch (error) {
       console.error('Error deleting customer:', error)
+      toast.error('Failed to delete customer')
+    } finally {
+      setCustomerToDelete(null)
     }
   }
 
@@ -89,14 +118,16 @@ export default function DashboardPage() {
       })
       const data = await response.json()
       console.log('Product created:', data)
+      toast.success('Product created successfully')
     } catch (error) {
       console.error('Error creating product:', error)
+      toast.error('Failed to create product')
     }
   }
 
   const createPrice = async () => {
     if (!productId) {
-      alert('Please enter a product ID')
+      toast.error('Please enter a product ID')
       return
     }
 
@@ -110,8 +141,10 @@ export default function DashboardPage() {
       })
       const data = await response.json()
       console.log('Price created:', data)
+      toast.success('Price created successfully')
     } catch (error) {
       console.error('Error creating price:', error)
+      toast.error('Failed to create price')
     }
   }
 
@@ -218,7 +251,7 @@ export default function DashboardPage() {
                       </div>
                       <Button
                         variant="destructive"
-                        onClick={() => deleteCustomer(customer.id)}
+                        onClick={() => handleDeleteClick(customer)}
                       >
                         Delete
                       </Button>
@@ -230,6 +263,26 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
+
+      <Dialog open={!!customerToDelete} onOpenChange={() => setCustomerToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Customer</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete {customerToDelete?.name}? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex space-x-2 justify-end">
+            <Button variant="outline" onClick={() => setCustomerToDelete(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={deleteCustomer}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Toaster />
     </div>
   )
