@@ -2,19 +2,29 @@
 
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { format } from "date-fns"
-import { CalendarIcon } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { CalendarIcon } from "lucide-react"
+import { format } from "date-fns"
+import { toast } from "sonner"
 
 interface TimeEntry {
   customerId: string
-  customerName: string
   date: Date
   startTime: string
   endTime: string
@@ -23,8 +33,9 @@ interface TimeEntry {
 
 interface Customer {
   id: string
-  name: string
   email: string
+  name: string
+  created: number
 }
 
 interface TimeTrackingProps {
@@ -32,29 +43,78 @@ interface TimeTrackingProps {
 }
 
 export function TimeTracking({ customers }: TimeTrackingProps) {
-  const [date, setDate] = useState<Date>()
-  const [startTime, setStartTime] = useState("")
-  const [endTime, setEndTime] = useState("")
-  const [selectedCustomer, setSelectedCustomer] = useState("")
-  const [notes, setNotes] = useState("")
+  const [selectedCustomer, setSelectedCustomer] = useState<string>("")
+  const [date, setDate] = useState<Date>(new Date())
+  const [startTime, setStartTime] = useState<string>("")
+  const [endTime, setEndTime] = useState<string>("")
+  const [notes, setNotes] = useState<string>("")
+  const [submitting, setSubmitting] = useState(false)
 
-  const handleSubmit = () => {
-    if (!date || !startTime || !endTime || !selectedCustomer) {
-      alert("Please fill in all required fields")
+  const calculateHours = (start: string, end: string): number => {
+    const [startHour, startMinute] = start.split(":").map(Number)
+    const [endHour, endMinute] = end.split(":").map(Number)
+    
+    const startInMinutes = startHour * 60 + startMinute
+    const endInMinutes = endHour * 60 + endMinute
+    
+    return (endInMinutes - startInMinutes) / 60
+  }
+
+  const handleSubmit = async () => {
+    if (!selectedCustomer || !date || !startTime || !endTime) {
+      toast.error("Please fill in all required fields")
       return
     }
 
-    const timeEntry: TimeEntry = {
-      customerId: selectedCustomer,
-      customerName: customers.find(c => c.id === selectedCustomer)?.name || "",
-      date: date,
-      startTime,
-      endTime,
-      notes
+    const hours = calculateHours(startTime, endTime)
+    if (hours <= 0) {
+      toast.error("End time must be after start time")
+      return
     }
 
-    console.log("Time entry created:", timeEntry)
-    // Here you would typically save this to your backend
+    setSubmitting(true)
+    try {
+      // Create the time entry
+      const timeEntry: TimeEntry = {
+        customerId: selectedCustomer,
+        date,
+        startTime,
+        endTime,
+        notes
+      }
+      console.log('Time entry created:', timeEntry)
+
+      // Submit billing meter event
+      const response = await fetch('/api/billing/meter-events', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          customerId: selectedCustomer,
+          hours,
+          date: date.toISOString(),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to submit time entry')
+      }
+
+      // Reset form
+      setSelectedCustomer("")
+      setDate(new Date())
+      setStartTime("")
+      setEndTime("")
+      setNotes("")
+      
+      toast.success("Time entry submitted successfully")
+    } catch (error) {
+      console.error('Error submitting time entry:', error)
+      toast.error("Failed to submit time entry")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -65,7 +125,7 @@ export function TimeTracking({ customers }: TimeTrackingProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <label className="text-sm font-medium">Customer</label>
+          <Label>Customer</Label>
           <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
             <SelectTrigger>
               <SelectValue placeholder="Select a customer" />
@@ -81,15 +141,12 @@ export function TimeTracking({ customers }: TimeTrackingProps) {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Date</label>
+          <Label>Date</Label>
           <Popover>
             <PopoverTrigger asChild>
               <Button
-                variant={"outline"}
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !date && "text-muted-foreground"
-                )}
+                variant="outline"
+                className="w-full justify-start text-left font-normal"
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {date ? format(date, "PPP") : <span>Pick a date</span>}
@@ -99,7 +156,7 @@ export function TimeTracking({ customers }: TimeTrackingProps) {
               <Calendar
                 mode="single"
                 selected={date}
-                onSelect={setDate}
+                onSelect={(date) => date && setDate(date)}
                 initialFocus
               />
             </PopoverContent>
@@ -108,41 +165,41 @@ export function TimeTracking({ customers }: TimeTrackingProps) {
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Start Time</label>
-            <div className="flex">
-              <Input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="flex-1"
-              />
-            </div>
+            <Label htmlFor="startTime">Start Time</Label>
+            <Input
+              id="startTime"
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+            />
           </div>
-
           <div className="space-y-2">
-            <label className="text-sm font-medium">End Time</label>
-            <div className="flex">
-              <Input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="flex-1"
-              />
-            </div>
+            <Label htmlFor="endTime">End Time</Label>
+            <Input
+              id="endTime"
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+            />
           </div>
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Notes</label>
+          <Label htmlFor="notes">Notes</Label>
           <Textarea
-            placeholder="Add any notes here..."
+            id="notes"
+            placeholder="Add any notes about the work done..."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
         </div>
 
-        <Button onClick={handleSubmit} className="w-full">
-          Add Entry
+        <Button 
+          className="w-full" 
+          onClick={handleSubmit}
+          disabled={submitting}
+        >
+          {submitting ? "Submitting..." : "Submit Time Entry"}
         </Button>
       </CardContent>
     </Card>
