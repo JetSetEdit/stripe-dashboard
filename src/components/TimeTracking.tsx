@@ -60,6 +60,16 @@ export function TimeTracking({ customers }: TimeTrackingProps) {
     return (endInMinutes - startInMinutes) / 60
   }
 
+  const calculateMinutes = (start: string, end: string): number => {
+    const [startHour, startMinute] = start.split(":").map(Number)
+    const [endHour, endMinute] = end.split(":").map(Number)
+    
+    const startInMinutes = startHour * 60 + startMinute
+    const endInMinutes = endHour * 60 + endMinute
+    
+    return endInMinutes - startInMinutes
+  }
+
   const handleSubmit = async () => {
     if (!selectedCustomer || !date || !startTime || !endTime) {
       toast.error("Please fill in all required fields")
@@ -85,33 +95,34 @@ export function TimeTracking({ customers }: TimeTrackingProps) {
       console.log('Time entry created:', timeEntry)
 
       // Submit billing meter event
-      const response = await fetch('/api/billing/meter-events', {
+      const response = await fetch('/api/meter-events', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           customerId: selectedCustomer,
-          hours,
-          date: date.toISOString(),
+          timestamp: Math.floor(date.getTime() / 1000),
+          minutes: calculateMinutes(startTime, endTime)
         }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to submit time entry')
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to submit time entry')
       }
 
+      toast.success('Time entry submitted successfully')
+      
       // Reset form
       setSelectedCustomer("")
       setDate(new Date())
       setStartTime("")
       setEndTime("")
       setNotes("")
-      
-      toast.success("Time entry submitted successfully")
     } catch (error) {
       console.error('Error submitting time entry:', error)
-      toast.error("Failed to submit time entry")
+      toast.error(error instanceof Error ? error.message : 'Failed to submit time entry')
     } finally {
       setSubmitting(false)
     }
@@ -193,6 +204,18 @@ export function TimeTracking({ customers }: TimeTrackingProps) {
             onChange={(e) => setNotes(e.target.value)}
           />
         </div>
+
+        {startTime && endTime && (
+          <div className="p-4 bg-muted rounded-lg">
+            <h3 className="font-medium mb-2">Time Summary</h3>
+            <div className="space-y-1 text-sm">
+              <p>Start Time: {startTime}</p>
+              <p>End Time: {endTime}</p>
+              <p>Duration: {calculateMinutes(startTime, endTime)} minutes</p>
+              <p className="text-muted-foreground">This will be billed as {calculateMinutes(startTime, endTime)} units (1 unit = 1 minute)</p>
+            </div>
+          </div>
+        )}
 
         <Button 
           className="w-full" 
