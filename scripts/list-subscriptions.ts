@@ -5,42 +5,40 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24.acacia'
+  apiVersion: '2023-10-16'
 });
+
+const CUSTOMER_ID = 'cus_RiPhnjYVL5R2MK'; // Nick's customer ID
 
 async function listSubscriptions() {
   try {
-    console.log('Fetching subscriptions...');
-    
     const subscriptions = await stripe.subscriptions.list({
-      customer: 'cus_S1ENlAVDtRShhb',
-      expand: ['data.customer', 'data.items']
+      customer: CUSTOMER_ID,
+      limit: 100,
+      expand: ['data.items']
     });
 
+    console.log('Found subscriptions:', subscriptions.data.length);
     subscriptions.data.forEach(sub => {
-      console.log('\nSubscription:', {
+      console.log({
         id: sub.id,
-        customer: {
-          id: sub.customer.id,
-          name: (sub.customer as Stripe.Customer).name,
-          email: (sub.customer as Stripe.Customer).email
-        },
-        status: sub.status
+        status: sub.status,
+        current_period_start: new Date(sub.current_period_start * 1000).toISOString(),
+        current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+        trial_end: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : 'No trial',
+        items: sub.items.data.map(item => ({
+          id: item.id,
+          price_id: item.price.id,
+        })),
       });
-      
-      console.log('Items:', sub.items.data.map(item => ({
-        id: item.id,
-        price: {
-          id: item.price.id,
-          unit_amount: item.price.unit_amount,
-          currency: item.price.currency
-        }
-      })));
     });
+
+    return subscriptions.data;
   } catch (error) {
-    console.error('Error fetching subscriptions:', error);
+    console.error('Error listing subscriptions:', error);
+    throw error;
   }
 }
 
-// Run the test
+// Run the listing
 listSubscriptions(); 

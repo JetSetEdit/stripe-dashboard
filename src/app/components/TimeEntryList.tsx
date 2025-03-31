@@ -113,15 +113,19 @@ export default function TimeEntryList({ customerId }: TimeEntryListProps) {
                 </TableCell>
                 <TableCell className="text-right">
                   {entry.usageRecordId && (
-                    <a
-                      href={`https://dashboard.stripe.com/test/subscriptions/${entry.subscriptionItemId.replace('si_', 'sub_')}/usage_records`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center text-blue-600 hover:text-blue-800"
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
                     >
-                      <ExternalLink className="w-4 h-4 mr-1" />
-                      View in Stripe
-                    </a>
+                      <a
+                        href={`https://dashboard.stripe.com/subscriptions/${entry.subscriptionItemId.replace('si_', 'sub_')}/usage_records`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        View in Stripe
+                      </a>
+                    </Button>
                   )}
                 </TableCell>
               </TableRow>

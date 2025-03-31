@@ -5,24 +5,36 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24.acacia'
+  apiVersion: '2023-10-16'
 });
 
 async function listCustomers() {
   try {
     console.log('Fetching customers...');
-    
     const customers = await stripe.customers.list({
-      limit: 10
+      limit: 100,
+      expand: ['data.subscriptions']
     });
 
-    console.log('Customers:', customers.data.map(customer => ({
-      id: customer.id,
-      name: customer.name,
-      email: customer.email
-    })));
+    console.log('Customers with subscriptions:');
+    for (const customer of customers.data) {
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customer.id,
+        limit: 1,
+        status: 'active'
+      });
+
+      const subscriptionItemId = subscriptions.data[0]?.items.data[0]?.id;
+      
+      console.log({
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+        subscriptionItemId: subscriptionItemId || 'No active subscription'
+      });
+    }
   } catch (error) {
-    console.error('Error fetching customers:', error);
+    console.error('Error:', error);
   }
 }
 

@@ -5,42 +5,39 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24.acacia'
+  apiVersion: '2023-10-16'
 });
 
 async function createMeteredPrice() {
   try {
-    // First create a product for the metered price
+    // Create the product
     const product = await stripe.products.create({
-      name: 'Time Tracking Service',
-      description: 'Metered time tracking service billed per minute ($50/hour)',
+      name: 'Time Tracking',
+      description: 'Per-minute time tracking service',
     });
 
-    // Create a metered price for the product
+    console.log('Created product:', product);
+
+    // Create the metered price
     const price = await stripe.prices.create({
       product: product.id,
+      unit_amount: 84, // $0.84 per minute
       currency: 'aud',
       recurring: {
         interval: 'month',
         usage_type: 'metered',
-        aggregate_usage: 'sum',
       },
-      unit_amount: 84, // $0.84 AUD per minute (equivalent to $50/hour)
-      billing_scheme: 'per_unit',
     });
 
-    const hourlyRate = price.unit_amount ? (price.unit_amount * 60) / 100 : 0;
+    console.log('Created price:', price);
 
-    console.log('Created metered price:', {
-      priceId: price.id,
+    return {
       productId: product.id,
-      unitAmount: price.unit_amount,
-      currency: price.currency,
-      effectiveHourlyRate: hourlyRate, // In AUD
-    });
-
+      priceId: price.id,
+    };
   } catch (error) {
-    console.error('Error creating metered price:', error);
+    console.error('Error:', error);
+    throw error;
   }
 }
 

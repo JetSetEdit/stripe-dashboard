@@ -5,36 +5,44 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24.acacia'
+  apiVersion: '2023-10-16'
 });
+
+const CUSTOMER_ID = 'cus_RiPhnjYVL5R2MK'; // Nick's customer ID
+const PRICE_ID = 'price_1R8YUeAVc47ah8I1XEfR4T7I'; // Our metered price ID
 
 async function createSubscription() {
   try {
-    const customerId = 'cus_S1ENlAVDtRShhb';
-    const priceId = 'price_1R8GScAVc47ah8I1Pe9lER01'; // New price at $0.84/minute
+    // Calculate trial end (start of April 2025)
+    const startOfApril = new Date(2025, 3, 1); // Month is 0-based, so 3 = April
+    const trialEnd = Math.floor(startOfApril.getTime() / 1000);
 
-    // Create a new subscription
+    // Create the subscription with trial
     const subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      items: [{
-        price: priceId,
-      }],
-      payment_behavior: 'default_incomplete',
-      payment_settings: { save_default_payment_method: 'on_subscription' },
-      expand: ['latest_invoice.payment_intent'],
+      customer: CUSTOMER_ID,
+      items: [{ price: PRICE_ID }],
+      collection_method: 'send_invoice',
+      days_until_due: 30,
+      trial_end: trialEnd
     });
 
     console.log('Created subscription:', {
-      subscriptionId: subscription.id,
+      id: subscription.id,
       status: subscription.status,
+      trial_end: new Date(subscription.trial_end! * 1000).toISOString(),
+      current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+      current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
       items: subscription.items.data.map(item => ({
-        priceId: item.price.id,
-        quantity: item.quantity
-      }))
+        id: item.id,
+        price_id: item.price.id,
+        product_id: item.price.product,
+      })),
     });
 
+    return subscription;
   } catch (error) {
     console.error('Error creating subscription:', error);
+    throw error;
   }
 }
 
