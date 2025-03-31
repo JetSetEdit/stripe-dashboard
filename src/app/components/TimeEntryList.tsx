@@ -28,32 +28,40 @@ interface TimeEntryListProps {
 export default function TimeEntryList({ customerId }: TimeEntryListProps) {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchEntries();
-  }, [customerId]);
+    const fetchEntries = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const response = await fetch(`/api/time-entries?customerId=${customerId}`);
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch time entries');
+        }
 
-  const fetchEntries = async () => {
-    try {
-      const response = await fetch(`/api/time-entries?customerId=${customerId}`);
-      const data = await response.json();
-      
-      if (Array.isArray(data)) {
         // Convert string dates to Date objects
-        const formattedData = data.map(entry => ({
+        const formattedData = data.map((entry: any) => ({
           ...entry,
           startTime: new Date(entry.startTime),
           endTime: new Date(entry.endTime),
           createdAt: new Date(entry.createdAt)
         }));
         setEntries(formattedData);
+      } catch (err) {
+        console.error('Error fetching time entries:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch time entries');
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Error fetching time entries:', error);
-    } finally {
-      setIsLoading(false);
+    };
+
+    if (customerId) {
+      fetchEntries();
     }
-  };
+  }, [customerId]);
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', {
@@ -78,11 +86,23 @@ export default function TimeEntryList({ customerId }: TimeEntryListProps) {
   };
 
   if (isLoading) {
-    return <div className="p-4 text-center">Loading time entries...</div>;
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-red-500 p-4 text-center">
+        {error}
+      </div>
+    );
   }
 
   if (entries.length === 0) {
-    return <div className="p-4 text-center text-gray-500">No time entries found</div>;
+    return <div className="text-gray-500 p-4 text-center">No time entries found for this customer</div>;
   }
 
   return (

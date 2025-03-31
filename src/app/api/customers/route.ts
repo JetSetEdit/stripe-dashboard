@@ -5,7 +5,7 @@ import dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24.acacia'
+  apiVersion: '2023-10-16'
 })
 
 export async function GET() {
@@ -20,51 +20,86 @@ export async function GET() {
 
     if (!customers?.data || !Array.isArray(customers.data)) {
       console.error('Invalid response from Stripe:', customers);
-      return NextResponse.json([], { status: 200 });
+      return NextResponse.json({ error: 'Invalid response from Stripe' }, { status: 500 });
     }
 
-    console.log('Processing customers data...');
+    console.log(`Found ${customers.data.length} customers`);
 
     // Process each customer and fetch their subscription items separately
     const transformedCustomers = await Promise.all(
       customers.data
         .filter(customer => customer && !customer.deleted)
         .map(async customer => {
+          console.log(`Processing customer: ${customer.name} (${customer.id})`);
+          
           const activeSubscriptions = customer.subscriptions?.data
-            ?.filter(sub => sub.status === 'active') || [];
+            ?.filter(sub => sub.status === 'active' || sub.status === 'trialing') || [];
+
+          console.log(`Found ${activeSubscriptions.length} active subscriptions for ${customer.name}`);
 
           // Fetch subscription items for each active subscription
           const subscriptionsWithItems = await Promise.all(
             activeSubscriptions.map(async sub => {
-              const subItems = await stripe.subscriptionItems.list({
-                subscription: sub.id
-              });
+              try {
+                const subItems = await stripe.subscriptionItems.list({
+                  subscription: sub.id,
+                  expand: ['data.price.product']
+                });
 
-              return {
-                id: sub.id,
-                status: sub.status,
-                current_period_end: sub.current_period_end,
-                subscriptionItemId: subItems.data[0]?.id || null
-              };
+                const item = subItems.data[0];
+                if (!item) {
+                  console.log(`No subscription items found for subscription ${sub.id}`);
+                  return null;
+                }
+
+                console.log(`Found subscription item for ${customer.name}:`, {
+                  subscriptionId: sub.id,
+                  itemId: item.id,
+                  productId: item.price?.product?.id,
+                  productName: item.price?.product?.name
+                });
+
+                return {
+                  id: sub.id,
+                  status: sub.status,
+                  current_period_end: sub.current_period_end,
+                  subscriptionItemId: item.id,
+                  priceId: item.price?.id || null,
+                  productId: item.price?.product?.id || null,
+                  productName: item.price?.product?.name || null
+                };
+              } catch (error) {
+                console.error(`Error fetching subscription items for ${customer.name}:`, error);
+                return null;
+              }
             })
           );
+
+          const validSubscriptions = subscriptionsWithItems.filter(Boolean);
+          const firstSubscription = validSubscriptions[0];
 
           return {
             id: customer.id,
             name: customer.name,
             email: customer.email,
-            subscriptionItemId: subscriptionsWithItems[0]?.subscriptionItemId || null
+            subscriptionItemId: firstSubscription?.subscriptionItemId || null,
+            subscriptionStatus: firstSubscription?.status || null,
+            subscriptionId: firstSubscription?.id || null,
+            priceId: firstSubscription?.priceId || null,
+            productId: firstSubscription?.productId || null,
+            productName: firstSubscription?.productName || null,
+            current_period_end: firstSubscription?.current_period_end || null
           };
         })
     );
 
-    const validCustomers = transformedCustomers.filter(customer => customer.subscriptionItemId);
-
-    console.log('Returning transformed customers:', validCustomers);
-
-    return NextResponse.json(validCustomers);
+    console.log(`Successfully processed ${transformedCustomers.length} customers`);
+    return NextResponse.json(transformedCustomers);
   } catch (error) {
     console.error('Error fetching customers:', error);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to fetch customers' },
+      { status: 500 }
+    );
   }
 } 

@@ -1,6 +1,6 @@
 'use client'
 
-import TimeTracker from './components/TimeTracker';
+import TimeTracker from '@/app/components/TimeTracker';
 import CustomerList from './components/CustomerList';
 import { useState } from 'react';
 
@@ -8,7 +8,13 @@ interface Customer {
   id: string;
   name: string;
   email: string;
-  subscriptionItemId?: string;
+  subscriptionItemId: string | null;
+  subscriptionStatus: string | null;
+  subscriptionId: string | null;
+  priceId: string | null;
+  productId: string | null;
+  productName: string | null;
+  current_period_end?: number;
 }
 
 export default function Home() {
@@ -19,27 +25,20 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">Time Tracking Dashboard</h1>
         
-        <div className="grid grid-cols-12 gap-8">
-          {/* Left sidebar with customer list */}
-          <div className="col-span-3 bg-white rounded-lg shadow overflow-hidden">
-            <div className="p-4 border-b">
-              <h2 className="text-xl font-semibold">Customers</h2>
-            </div>
-            <CustomerList onSelectCustomer={setSelectedCustomer} />
+        <div className="grid grid-cols-4 gap-6">
+          <div className="col-span-1">
+            <CustomerList 
+              onSelectCustomer={setSelectedCustomer} 
+              selectedCustomerId={selectedCustomer?.id}
+            />
           </div>
-
-          {/* Main content area */}
-          <div className="col-span-9">
-            {selectedCustomer ? (
-              <TimeTracker 
-                customerId={selectedCustomer.id}
-                subscriptionItemId={selectedCustomer.subscriptionItemId || ''}
-              />
-            ) : (
-              <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
-                Select a customer to start tracking time
-              </div>
-            )}
+          
+          <div className="col-span-3">
+            <TimeTracker 
+              customerId={selectedCustomer?.id || ''} 
+              subscriptionItemId={selectedCustomer?.subscriptionItemId || ''}
+              customer={selectedCustomer}
+            />
           </div>
         </div>
       </div>

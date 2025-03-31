@@ -14,26 +14,51 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { subscriptionItemId, minutes, description, timeEntry } = body
 
-    console.log('Received request body:', body)
+    console.log('Processing time entry request:', {
+      subscriptionItemId,
+      minutes,
+      description,
+      customerId: timeEntry?.customerId,
+      startTime: timeEntry?.startTime,
+      endTime: timeEntry?.endTime
+    })
 
-    if (!subscriptionItemId || !minutes || !timeEntry) {
+    // Validate required fields
+    if (!subscriptionItemId || !subscriptionItemId.startsWith('si_')) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Invalid subscription item ID', details: 'Subscription item ID must start with "si_"' },
         { status: 400 }
       )
     }
 
-    // 1. First create the time entry in the database (without usage record ID)
+    if (!minutes || minutes <= 0) {
+      return NextResponse.json(
+        { error: 'Invalid minutes', details: 'Minutes must be a positive number' },
+        { status: 400 }
+      )
+    }
+
+    if (!timeEntry || !timeEntry.customerId || !timeEntry.startTime || !timeEntry.endTime) {
+      return NextResponse.json(
+        { error: 'Invalid time entry', details: 'Missing required time entry fields' },
+        { status: 400 }
+      )
+    }
+
+    // 1. First create the time entry in the database
     const dbTimeEntry = await prisma.timeEntry.create({
       data: {
         customerId: timeEntry.customerId,
         startTime: new Date(timeEntry.startTime),
         endTime: new Date(timeEntry.endTime),
         minutes: timeEntry.minutes,
-        description: timeEntry.description,
+        description: timeEntry.description || '',
         subscriptionItemId: subscriptionItemId,
       }
-    })
+    }).catch(error => {
+      console.error('Database error creating time entry:', error);
+      throw new Error('Failed to create time entry in database');
+    });
 
     console.log('Time entry created in database:', dbTimeEntry)
 
@@ -58,28 +83,50 @@ export async function POST(request: Request) {
 
       console.log('Time entry updated with usage record ID:', updatedTimeEntry)
 
-      return NextResponse.json(updatedTimeEntry)
-    } catch (stripeError) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          timeEntry: updatedTimeEntry,
+          usageRecord: {
+            id: usageRecord.id,
+            quantity: usageRecord.quantity,
+            timestamp: usageRecord.timestamp
+          }
+        }
+      })
+    } catch (stripeError: any) {
       // If Stripe fails, delete the time entry and report the error
       await prisma.timeEntry.delete({
         where: { id: dbTimeEntry.id }
-      })
+      }).catch(error => {
+        console.error('Failed to delete time entry after Stripe error:', error);
+      });
 
-      console.error('Stripe API error details:', {
-        error: stripeError.message,
+      console.error('Stripe API error:', {
+        message: stripeError.message,
         type: stripeError.type,
+        code: stripeError.code,
+        param: stripeError.param,
         raw: stripeError
       })
 
       return NextResponse.json(
-        { error: stripeError.message },
+        { 
+          error: 'Failed to create usage record',
+          details: stripeError.message,
+          code: stripeError.code || 'unknown'
+        },
         { status: 400 }
       )
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Server error:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error.message || 'An unexpected error occurred',
+        code: error.code || 'unknown'
+      },
       { status: 500 }
     )
   }
