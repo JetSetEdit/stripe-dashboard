@@ -2,9 +2,5 @@
   "version": 2,
   "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "framework": "nextjs",
-  "env": {
-    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "@next_public_stripe_publishable_key",
-    "STRIPE_SECRET_KEY": "@stripe_secret_key"
-  }
+  "framework": "nextjs"
 } 
