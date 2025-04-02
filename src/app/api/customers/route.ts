@@ -8,6 +8,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2023-10-16'
 })
 
+const TIME_TRACKING_PRODUCT_ID = 'prod_S2dmZfNg3K3OqO';
+
 export async function GET() {
   try {
     console.log('Fetching customers with subscriptions...');
@@ -76,19 +78,23 @@ export async function GET() {
           );
 
           const validSubscriptions = subscriptionsWithItems.filter(Boolean);
-          const firstSubscription = validSubscriptions[0];
+          
+          // Find the Time Tracking subscription
+          const timeTrackingSubscription = validSubscriptions.find(
+            sub => sub?.productId === TIME_TRACKING_PRODUCT_ID
+          );
 
           return {
             id: customer.id,
             name: customer.name,
             email: customer.email,
-            subscriptionItemId: firstSubscription?.subscriptionItemId || null,
-            subscriptionStatus: firstSubscription?.status || null,
-            subscriptionId: firstSubscription?.id || null,
-            priceId: firstSubscription?.priceId || null,
-            productId: firstSubscription?.productId || null,
-            productName: firstSubscription?.productName || null,
-            current_period_end: firstSubscription?.current_period_end || null
+            subscriptionItemId: timeTrackingSubscription?.subscriptionItemId || null,
+            subscriptionStatus: timeTrackingSubscription?.status || null,
+            subscriptionId: timeTrackingSubscription?.id || null,
+            priceId: timeTrackingSubscription?.priceId || null,
+            productId: timeTrackingSubscription?.productId || null,
+            productName: timeTrackingSubscription?.productName || null,
+            current_period_end: timeTrackingSubscription?.current_period_end || null
           };
         })
     );
